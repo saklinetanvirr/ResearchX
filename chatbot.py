@@ -8,6 +8,7 @@ from chains import (
 from config import llm
 
 
+
 class ResearchX:
 
 
@@ -19,23 +20,28 @@ class ResearchX:
 
 
 
+    # -----------------------
+    # Streaming answer
+    # -----------------------
+
     def stream_answer(self, question):
 
-        draft = self.branch.invoke(question)
+        draft = self.branch.invoke(
+            question
+        )
 
 
         prompt = PromptTemplate.from_template(
         """
 You are ResearchX, an AI/ML research assistant.
 
-Provide a high quality explanation.
+Answer the question clearly.
 
-Rules:
-
-- Use markdown headings
-- Explain step by step
-- Use examples
-- Keep technical accuracy
+Use:
+- headings
+- explanations
+- bullet points
+- technical accuracy
 
 
 Question:
@@ -43,7 +49,7 @@ Question:
 {question}
 
 
-Research Notes:
+Research Draft:
 
 {draft}
 
@@ -54,32 +60,34 @@ Research Notes:
         chain = prompt | llm
 
 
-        full_answer = ""
-
-
         for chunk in chain.stream(
             {
-                "question": question,
-                "draft": draft
+                "question":question,
+                "draft":draft
             }
         ):
 
             if chunk.content:
 
-                full_answer += chunk.content
-
                 yield chunk.content
 
 
 
+    # -----------------------
+    # Structured report
+    # -----------------------
+
     def analyze(self, question):
 
-        draft = self.branch.invoke(question)
+
+        draft = self.branch.invoke(
+            question
+        )
 
 
         result = self.structured.invoke(
             {
-                "draft": draft
+                "draft":draft
             }
         )
 

@@ -83,5 +83,6 @@ class ResearchResponse(BaseModel):
 
 
     bottom_line: str = Field(
+        default="",
         description="Final conclusion of the research topic."
     )
