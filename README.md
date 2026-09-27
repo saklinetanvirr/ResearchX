@@ -1,3 +1,18 @@
+---
+title: ResearchX
+emoji: 🔬
+colorFrom: blue
+colorTo: purple
+sdk: gradio
+sdk_version: 5.0
+app_file: app.py
+pinned: false
+---
+
+# ResearchX
+
+Your AI assistant for AI/ML research exploration.
+
 # ⟡ ResearchX
 
 ## AI Research Assistant for Generative AI & Machine Learning
