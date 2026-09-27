@@ -1,44 +1,87 @@
-from typing import Literal
-
+from typing import List
 from pydantic import BaseModel, Field
 
 
 class ResearchResponse(BaseModel):
-    """Validated response schema displayed by the Streamlit application."""
 
-    answer: str = Field(
-        description="The main answer to the user's research question."
+    topic: str = Field(
+        description="Short topic/title for the user's question."
     )
-    summary: str = Field(
-        description="A concise summary of the answer."
+
+
+    research_area: List[str] = Field(
+        default_factory=list,
+        description="2-5 broader research areas related to the topic."
     )
-    category: Literal[
-        "Concept Explanation",
-        "Research Gap",
-        "Research Methodology",
-        "Research Planning",
-        "General Research",
-    ] = Field(
-        description="The research-question category."
+
+
+    category: str = Field(
+        description="Research category."
     )
-    key_concepts: list[str] = Field(
-        description="Important concepts extracted from the response."
+
+
+    difficulty: str = Field(
+        description="Difficulty level."
     )
-    difficulty: Literal[
-        "Beginner",
-        "Intermediate",
-        "Advanced",
-    ] = Field(
-        description="Estimated difficulty for understanding the topic."
-    )
+
+
     confidence: float = Field(
         ge=0.0,
         le=1.0,
-        description="Model confidence from 0.0 to 1.0."
+        description="Confidence score."
     )
-    research_directions: list[str] = Field(
-        description="Potential research directions or next steps."
+
+
+    answer: str = Field(
+        description="Direct answer."
     )
-    follow_up_questions: list[str] = Field(
-        description="Useful follow-up questions for the researcher."
+
+
+    summary: str = Field(
+        description="Executive summary."
+    )
+
+
+    why_it_matters: str = Field(
+        description="Why this topic matters."
+    )
+
+
+    key_concepts: List[str] = Field(
+        default_factory=list
+    )
+
+
+    technical_breakdown: List[str] = Field(
+        default_factory=list
+    )
+
+
+    challenges: List[str] = Field(
+        default_factory=list
+    )
+
+
+    research_directions: List[str] = Field(
+        default_factory=list
+    )
+
+
+    experimental_setup: List[str] = Field(
+        default_factory=list
+    )
+
+
+    evaluation_plan: List[str] = Field(
+        default_factory=list
+    )
+
+
+    follow_up_questions: List[str] = Field(
+        default_factory=list
+    )
+
+
+    bottom_line: str = Field(
+        description="Final conclusion of the research topic."
     )

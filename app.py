@@ -1,295 +1,576 @@
-import time
-
-import streamlit as st
+import gradio as gr
 
 from chatbot import ResearchX
 from config import APP_TITLE
 
 
-st.set_page_config(
-    page_title=APP_TITLE,
-    page_icon="⟡",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
+# ==========================
+# Model Loader
+# ==========================
+
+pilot = None
 
 
-# ---------- Styling ----------
-st.markdown(
-    """
-    <style>
-    .block-container {
-        max-width: 1100px;
-        padding-top: 2rem;
-    }
-
-    /* Centered ResearchX header */
-    .researchx-header {
-        text-align: center;
-        margin: 1rem 0 2.5rem 0;
-        padding: 0;
-        border: none;
-    }
-
-    .researchx-header h1 {
-        margin: 0;
-        padding: 0;
-        font-size: 3rem;
-        font-weight: 700;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-
-@st.cache_resource
 def get_pilot():
-    return ResearchX()
+
+    global pilot
+
+    if pilot is None:
+        pilot = ResearchX()
+
+    return pilot
 
 
-pilot = get_pilot()
 
+# ==========================
+# Formatting Helpers
+# ==========================
 
-# ---------- Header ----------
-st.markdown(
-    f"""
-    <div class="researchx-header">
-        <h1>⟡ {APP_TITLE}</h1>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+def bullet_list(items):
 
+    if not items:
+        return "_Not available._"
 
-# ---------- Sidebar ----------
-with st.sidebar:
-    st.header("ResearchX")
-    st.caption("Your AI assistant for AI/ML research exploration.")
-
-    st.markdown("### Supported research modes")
-    st.markdown(
-        """
-        - 📘 Concept Explanation
-        - 🔎 Research Gap Exploration
-        - 🧪 Research Methodology
-        - 🗺️ Research Planning
-        - 📄 Paper/Topic Analysis
-        """
+    return "\n".join(
+        f"- {item}"
+        for item in items
     )
 
-    st.markdown("---")
-
-    st.markdown("### Example questions")
-
-    examples = [
-        "What is Retrieval-Augmented Generation?",
-        "What research gaps exist in RAG hallucination detection?",
-        "How should I evaluate a RAG system?",
-        "How can I turn an AI idea into a research plan?",
-    ]
-
-    for item in examples:
-        st.caption(f"• {item}")
-
-    st.markdown("---")
-
-    if st.button("🗑️ Clear Chat", use_container_width=True):
-        st.session_state.messages = []
-        st.rerun()
 
 
-# ---------- Helper: word-by-word streaming ----------
-def stream_text(text):
-    """
-    Creates a ChatGPT-like typing effect by displaying
-    the generated answer progressively.
-    """
+def numbered_list(items):
 
-    words = text.split(" ")
+    if not items:
+        return "_Not available._"
 
-    for i, word in enumerate(words):
-        if i == 0:
-            yield word
-        else:
-            yield " " + word
-
-        # Controls typing speed
-        time.sleep(0.025)
-
-
-# ---------- Chat history ----------
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-
-for message in st.session_state.messages:
-
-    role = message["role"]
-
-    with st.chat_message(
-        role,
-        avatar="🧑‍🎓" if role == "user" else "✨",
-    ):
-
-        if role == "user":
-            st.markdown(message["content"])
-
-        else:
-            result = message["result"]
-
-            # Previously generated answer
-            st.markdown(result.answer)
-
-            with st.expander("📋 Research Analysis", expanded=True):
-
-                c1, c2, c3 = st.columns(3)
-
-                c1.metric("Category", result.category)
-                c2.metric("Difficulty", result.difficulty)
-
-                c3.metric(
-                    "Confidence",
-                    f"{result.confidence:.0%}",
-                )
-
-                st.markdown("**📝 Summary**")
-                st.write(result.summary)
-
-                st.markdown("**🔑 Key Concepts**")
-                st.write(", ".join(result.key_concepts))
-
-                if result.research_directions:
-
-                    st.markdown("**🚀 Research Directions**")
-
-                    for direction in result.research_directions:
-                        st.markdown(f"- {direction}")
-
-                if result.follow_up_questions:
-
-                    st.markdown("**❓ Follow-up Questions**")
-
-                    for question in result.follow_up_questions:
-                        st.markdown(f"- {question}")
-
-
-# ---------- Input ----------
-prompt = st.chat_input(
-    "Ask a research question about AI, ML, Generative AI, or research methodology..."
-)
-
-
-if prompt:
-
-    # Store user message
-    st.session_state.messages.append(
-        {
-            "role": "user",
-            "content": prompt,
-        }
+    return "\n".join(
+        f"{i+1}. {item}"
+        for i, item in enumerate(items)
     )
 
-    # Display user message
-    with st.chat_message(
-        "user",
-        avatar="🧑‍🎓",
-    ):
-        st.markdown(prompt)
 
 
-    # ---------- Generate Assistant Response ----------
-    with st.chat_message(
-        "assistant",
-        avatar="✨",
-    ):
+# ==========================
+# Main Function
+# ==========================
 
-        with st.status(
-            "ResearchX is analyzing your question...",
-            expanded=False,
-        ):
+def ask_researchx(question):
 
-            try:
-                result = pilot.ask(prompt)
+    if not question.strip():
 
-            except Exception as exc:
+        yield (
+            "Please enter a research question.",
+            *[""] * 13
+        )
 
-                st.error(
-                    "I couldn't complete the request. "
-                    "Please check the API configuration "
-                    "or try again later."
-                )
-
-                st.exception(exc)
-                st.stop()
+        return
 
 
-        # ---------- Streaming Answer ----------
-        st.write_stream(
-            stream_text(result.answer)
+    try:
+
+        bot = get_pilot()
+
+
+        answer = ""
+
+
+        # ----------------------
+        # Streaming Answer
+        # ----------------------
+
+        for token in bot.stream_answer(question):
+
+            answer += token
+
+
+            yield (
+
+                answer,
+
+                "",
+
+                "",
+
+                "",
+
+                "",
+
+                "",
+
+                "",
+
+                "",
+
+                "",
+
+                "",
+
+                "",
+
+                "",
+
+                question,
+
+                ""
+
+            )
+
+
+        # ----------------------
+        # Structured Analysis
+        # ----------------------
+
+        result = bot.analyze(question)
+
+
+
+        profile = f"""
+## 🔬 Research Profile
+
+
+### Topic
+{result.topic}
+
+
+### Research Area
+{", ".join(result.research_area)}
+
+
+### Category
+{result.category}
+
+
+### Difficulty
+{result.difficulty}
+
+
+### Confidence
+{result.confidence:.0%}
+
+"""
+
+
+
+        yield (
+
+            answer,
+
+            profile,
+
+            result.summary,
+
+            result.why_it_matters,
+
+            bullet_list(
+                result.key_concepts
+            ),
+
+            numbered_list(
+                result.technical_breakdown
+            ),
+
+            numbered_list(
+                result.challenges
+            ),
+
+            numbered_list(
+                result.research_directions
+            ),
+
+            numbered_list(
+                result.experimental_setup
+            ),
+
+            numbered_list(
+                result.evaluation_plan
+            ),
+
+            numbered_list(
+                result.follow_up_questions
+            ),
+
+            result.bottom_line,
+
+            question,
+
+            ""
+
         )
 
 
-        # ---------- Research Analysis ----------
-        with st.expander(
-            "📋 Research Analysis",
-            expanded=True,
-        ):
 
-            c1, c2, c3 = st.columns(3)
+    except Exception as e:
 
-            c1.metric(
-                "Category",
-                result.category,
+
+        yield (
+
+            f"""
+## ❌ Error
+
+{str(e)}
+""",
+
+            *[""] * 11,
+
+            question,
+
+            ""
+
+        )
+
+
+
+# ==========================
+# Examples
+# ==========================
+
+examples = [
+
+    ["What is Retrieval-Augmented Generation?"],
+
+    ["What research gaps exist in RAG hallucination detection?"],
+
+    ["How should I evaluate a RAG system?"],
+
+    ["How can I turn an AI idea into a research plan?"],
+
+    ["What is self-RAG?"],
+
+]
+
+
+
+# ==========================
+# CSS
+# ==========================
+
+css = """
+
+#title {
+
+text-align:center;
+font-size:42px;
+font-weight:700;
+
+}
+
+
+#subtitle {
+
+text-align:center;
+color:#666;
+margin-bottom:25px;
+
+}
+
+
+.gradio-container {
+
+max-width:1400px !important;
+
+}
+
+"""
+
+
+
+# ==========================
+# Interface
+# ==========================
+
+
+with gr.Blocks(
+    title=APP_TITLE
+) as demo:
+
+
+    gr.Markdown(
+f"""
+
+<div id="title">
+
+⟡ {APP_TITLE}
+
+</div>
+
+
+<div id="subtitle">
+
+Your AI assistant for AI/ML research exploration.
+
+</div>
+
+"""
+)
+
+
+
+    with gr.Row():
+
+
+        with gr.Column(scale=1):
+
+
+            gr.Markdown(
+"""
+## Supported Research Modes
+
+
+📘 Concept Explanation
+
+🔎 Research Gap Exploration
+
+🧪 Research Methodology
+
+🗺️ Research Planning
+
+📄 Paper / Topic Analysis
+
+
+---
+
+
+## Example Questions
+
+
+• What is RAG?
+
+• Research gaps in hallucination detection
+
+• How to evaluate a RAG system?
+
+• Create an AI research plan
+
+"""
+)
+
+
+
+        with gr.Column(scale=3):
+
+
+            question = gr.Textbox(
+
+                label="Ask ResearchX",
+
+                placeholder=
+                "Ask about AI, ML, Generative AI, or research methodology...",
+
+                lines=3
+
             )
 
-            c2.metric(
-                "Difficulty",
-                result.difficulty,
-            )
-
-            c3.metric(
-                "Confidence",
-                f"{result.confidence:.0%}",
-            )
 
 
-            st.markdown("**📝 Summary**")
-            st.write(result.summary)
+            with gr.Row():
 
-
-            st.markdown("**🔑 Key Concepts**")
-            st.write(", ".join(result.key_concepts))
-
-
-            if result.research_directions:
-
-                st.markdown(
-                    "**🚀 Research Directions**"
+                submit_btn = gr.Button(
+                    "✨ Analyze",
+                    variant="primary"
                 )
 
-                for direction in result.research_directions:
-                    st.markdown(
-                        f"- {direction}"
-                    )
 
-
-            if result.follow_up_questions:
-
-                st.markdown(
-                    "**❓ Follow-up Questions**"
+                clear_btn = gr.Button(
+                    "🗑️ Clear"
                 )
 
-                for question in result.follow_up_questions:
-                    st.markdown(
-                        f"- {question}"
-                    )
 
 
-    # ---------- Save Assistant Response ----------
-    st.session_state.messages.append(
-        {
-            "role": "assistant",
-            "result": result,
-        }
+            gr.Examples(
+
+                examples=examples,
+
+                inputs=question
+
+            )
+
+
+
+            answer = gr.Markdown(
+                label="Quick Answer"
+            )
+
+
+            profile = gr.Markdown(
+                label="Research Profile"
+            )
+
+
+
+            with gr.Tab("Executive Summary"):
+
+                summary = gr.Markdown()
+
+
+
+            with gr.Tab("Why It Matters"):
+
+                why_it_matters = gr.Markdown()
+
+
+
+            with gr.Tab("Key Concepts"):
+
+                key_concepts = gr.Markdown()
+
+
+
+            with gr.Tab("Technical Breakdown"):
+
+                technical_breakdown = gr.Markdown()
+
+
+
+            with gr.Tab("Challenges / Limitations"):
+
+                challenges = gr.Markdown()
+
+
+
+            with gr.Tab("Research Directions"):
+
+                research_directions = gr.Markdown()
+
+
+
+            with gr.Tab("Experimental Setup"):
+
+                experimental_setup = gr.Markdown()
+
+
+
+            with gr.Tab("Evaluation Plan"):
+
+                evaluation_plan = gr.Markdown()
+
+
+
+            with gr.Tab("Follow-up Questions"):
+
+                follow_up_questions = gr.Markdown()
+
+
+
+            with gr.Tab("Bottom Line"):
+
+                bottom_line = gr.Markdown()
+
+
+
+            hidden_question = gr.Textbox(
+                visible=False
+            )
+
+
+            status_box = gr.Textbox(
+                visible=False
+            )
+
+
+
+    # ==========================
+    # Event Connections
+    # MUST BE INSIDE BLOCKS
+    # ==========================
+
+
+    outputs = [
+
+        answer,
+
+        profile,
+
+        summary,
+
+        why_it_matters,
+
+        key_concepts,
+
+        technical_breakdown,
+
+        challenges,
+
+        research_directions,
+
+        experimental_setup,
+
+        evaluation_plan,
+
+        follow_up_questions,
+
+        bottom_line,
+
+        hidden_question,
+
+        status_box,
+
+    ]
+
+
+
+    submit_btn.click(
+
+        fn=ask_researchx,
+
+        inputs=question,
+
+        outputs=outputs
+
+    )
+
+
+
+    question.submit(
+
+        fn=ask_researchx,
+
+        inputs=question,
+
+        outputs=outputs
+
+    )
+
+
+
+    clear_btn.click(
+
+        fn=lambda:
+        (
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+        ),
+
+        outputs=outputs
+
+    )
+
+
+
+# ==========================
+# Launch
+# ==========================
+
+demo.queue(
+    max_size=20
+)
+
+
+
+if __name__ == "__main__":
+
+    demo.launch(
+        share=True,
+        css=css
     )
